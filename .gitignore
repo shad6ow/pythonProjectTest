@@ -1,0 +1,24 @@
+# Python 虚拟环境
+.venv/
+venv/
+env/
+
+# PyCharm IDE 配置
+.idea/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# 模型权重文件（文件过大，不适合 Git 管理）
+*.pth
+*.pt
+*.ckpt
+*.pkl
+
+# 系统文件
+.DS_Store
+Thumbs.db

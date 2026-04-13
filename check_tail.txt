@@ -1,0 +1,16 @@
+﻿1447 ''
+1448 '    # pin_memory 浠呭湪鏈?GPU 鏃舵湁鎰忎箟锛岃嚜鍔ㄦ娴?
+1449 '    use_pin = torch.cuda.is_available()'
+1450 ''
+1451 '    train_loader = DataLoader(train_ds,'
+1452 '                              batch_size  = batch_size,'
+1453 '                              sampler     = sampler,'
+1454 '                              num_workers = num_workers,'
+1455 '                              pin_memory  = use_pin)'
+1456 '    test_loader  = DataLoader(test_ds,'
+1457 '                              batch_size  = batch_size,'
+1458 '                              shuffle     = False,'
+1459 '                              num_workers = num_workers,'
+1460 '                              pin_memory  = use_pin)'
+1461 ''
+total: 1461
