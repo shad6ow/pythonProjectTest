@@ -1417,14 +1417,99 @@ exec(open('patch_feature_select.py', encoding='utf-8').read())
 # =============================================================================
 exec(open('patch_quick_auc.py', encoding='utf-8').read())
 
-# 同步更新 DataLoader 中的 tensor（FEAT_DIM 已由 patch 更新）
+# =============================================================================
+# Step A-15【核心改进】: 用月度序列替换7天窗口序列作为 Transformer 输入
+# 原因：7天窗口聚合损失了月度趋势信息；LightGBM实验证实月度数据更有判别力
+# 新输入形状：(N, 34个月, FEAT_DIM_MO)
+# =============================================================================
+print("\n" + "=" * 65)
+print("Step A-15: 重建 Transformer 输入 → 月度序列替换7天窗口")
+print("=" * 65)
+
+# ── 构造月度时序特征矩阵 (N, N_MONTHS, K_MO) ──────────────────────────
+# 每个时间步 = 1个月，包含：
+#   ch0: 月均消费（归一化）
+#   ch1: 月消费标准差
+#   ch2: 月最大值
+#   ch3: 月最小值
+#   ch4: 月零值占比
+#   ch5: 相对于全用户同月中位数的偏差（排名特征）
+#   ch6~: 用户级标量特征（平铺到所有月份）
+
+_N, _T  = X.shape
+_DAYSPM = 30
+_NM     = _T // _DAYSPM   # 34
+
+# 基础月度通道 (N, NM, 6)
+_mo_mean = np.zeros((_N, _NM), dtype=np.float32)
+_mo_std  = np.zeros((_N, _NM), dtype=np.float32)
+_mo_max  = np.zeros((_N, _NM), dtype=np.float32)
+_mo_min  = np.zeros((_N, _NM), dtype=np.float32)
+_mo_zero = np.zeros((_N, _NM), dtype=np.float32)
+
+for _m in range(_NM):
+    _s  = _m * _DAYSPM
+    _e  = min(_s + _DAYSPM, _T)
+    _seg = X[:, _s:_e]
+    _mo_mean[:, _m] = _seg.mean(axis=1)
+    _mo_std[:, _m]  = _seg.std(axis=1)
+    _mo_max[:, _m]  = _seg.max(axis=1)
+    _mo_min[:, _m]  = _seg.min(axis=1)
+    _mo_zero[:, _m] = (_seg == 0).mean(axis=1)
+
+# ch5: 用户月消费相对全局中位数的偏差（跨用户排名信号）
+_mo_median_global = np.median(_mo_mean, axis=0, keepdims=True)   # (1, NM)
+_mo_rank_dev = _mo_mean - _mo_median_global                       # (N, NM)
+
+# 差分通道 ch6: 月度一阶差分（直接捕捉斜率变化）
+_mo_diff1 = np.diff(_mo_mean, axis=1, prepend=_mo_mean[:, :1])   # (N, NM)
+
+# 归一化所有通道（RobustScaler 逐通道）
+from sklearn.preprocessing import RobustScaler as _RS
+
+def _scale_ch(arr2d, clip=5.0):
+    """arr2d: (N, NM) → 归一化后 (N, NM)"""
+    flat = arr2d.reshape(-1, 1)
+    flat = _RS().fit_transform(flat).reshape(arr2d.shape)
+    return np.clip(flat, -clip, clip).astype(np.float32)
+
+_mo_ch = np.stack([
+    _scale_ch(_mo_mean),      # ch0 月均消费
+    _scale_ch(_mo_std),       # ch1 月消费波动
+    _scale_ch(_mo_max),       # ch2 月最大值
+    _scale_ch(_mo_min),       # ch3 月最小值
+    _mo_zero,                 # ch4 零值比（已在[0,1]）
+    _scale_ch(_mo_rank_dev),  # ch5 跨用户排名偏差
+    _scale_ch(_mo_diff1),     # ch6 月度差分
+], axis=2)   # (N, NM, 7)
+
+# 追加用户级标量特征（从 X_seq14_ds 时间轴均值取，平铺到 NM 步）
+_scalar_feats = X_seq14_ds.mean(axis=1)   # (N, FEAT_DIM)
+_scalar_tiled = np.tile(
+    _scalar_feats[:, np.newaxis, :], (1, _NM, 1)
+)   # (N, NM, FEAT_DIM)
+
+# 最终拼接：月度通道 + 用户标量特征
+X_mo_seq = np.concatenate([_mo_ch, _scalar_tiled], axis=2).astype(np.float32)
+FEAT_DIM_MO = X_mo_seq.shape[2]
+N_STEPS_MO  = _NM   # 34
+
+print(f"  月度序列形状: {X_mo_seq.shape}")
+print(f"  时间步数: {N_STEPS_MO} 个月  特征维度: {FEAT_DIM_MO}")
+print(f"    ch0~6: 月度统计 (7维)")
+print(f"    ch7~:  用户标量特征 ({FEAT_DIM} 维，平铺)")
+
+# ── 重建 DataLoader ────────────────────────────────────────────────────
 idx_tr14, idx_te14 = train_test_split(
     np.arange(len(y)), test_size=0.2, random_state=42, stratify=y
 )
-X_tr14 = torch.FloatTensor(X_seq14_ds[idx_tr14])
+X_tr14 = torch.FloatTensor(X_mo_seq[idx_tr14])
 y_tr14 = torch.FloatTensor(y[idx_tr14])
-X_te14 = torch.FloatTensor(X_seq14_ds[idx_te14])
+X_te14 = torch.FloatTensor(X_mo_seq[idx_te14])
 y_te14 = torch.FloatTensor(y[idx_te14])
+
+# 更新 FEAT_DIM 供后续 Transformer 使用
+FEAT_DIM = FEAT_DIM_MO
 
 class_counts14 = np.bincount(y[idx_tr14].astype(int))
 sample_w14     = (1.0 / class_counts14)[y[idx_tr14].astype(int)]
@@ -1849,8 +1934,8 @@ model_dual = DualPathTransformer(
     num_layers = 3,
     dim_ff     = 256,
     dropout    = 0.15,
-    win_size   = 8,
-    max_len    = 60
+    win_size   = 4,       # 月度序列34步，窗口4步=4个月，捕捉季度趋势
+    max_len    = 40       # 略大于34，留余量
 ).to(device)
 # ⚠️ 强制禁用 UserGraphAttention（CPU上O(B²)，会让每epoch从150s变600s）
 # Windows CPU 不使用 torch.compile，直接访问模型属性
