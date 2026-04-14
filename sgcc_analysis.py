@@ -1411,6 +1411,12 @@ exec(open('patch_feature_boost.py', encoding='utf-8').read())
 # =============================================================================
 exec(open('patch_feature_select.py', encoding='utf-8').read())
 
+# =============================================================================
+# Step A-14【新增】: 月度趋势特征 + LightGBM 快速基线
+# 月度特征是窃电检测最强信号，LightGBM 30秒内出 AUC 天花板结果
+# =============================================================================
+exec(open('patch_quick_auc.py', encoding='utf-8').read())
+
 # 同步更新 DataLoader 中的 tensor（FEAT_DIM 已由 patch 更新）
 idx_tr14, idx_te14 = train_test_split(
     np.arange(len(y)), test_size=0.2, random_state=42, stratify=y
