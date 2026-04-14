@@ -1401,83 +1401,17 @@ _new_g_tiled = np.tile(_new_g[:, np.newaxis, :],
                         (1, X_seq14_ds.shape[1], 1))   # (N,48,5)
 X_seq14_ds = np.concatenate([X_seq14_ds, _new_g_tiled], axis=2)
 FEAT_DIM   = X_seq14_ds.shape[2]
-print(f"  拼入 Token26~30 后形状: {X_seq14_ds.shape}  (FEAT_DIM={FEAT_DIM})")
-
-
+# Step A-12【新增】: 高判别力特征增强 (F31~F38)
+# 与 RMT 协同的8维新特征：熵特征 + Hurst 指数 + KPSS + RMT差分加权
+# =============================================================================
+exec(open('patch_feature_boost.py', encoding='utf-8').read())
 
 # =============================================================================
-# 新增高判别力 Token26~30（提升各维度 Token AUC）
-# 现有瓶颈：绝对值投影/无跨期对比/无跨用户排名
-# Token26: 归一化RMT能量比  (v1·x)²/||x||²  → AUC目标≥0.62
-# Token27: 长期下降趋势  后半段/前半段均值  → AUC目标≥0.65
-# Token28: 跨用户百分位排名变化 早→晚       → AUC目标≥0.65
-# Token29: v1投影时序变化 后期-前期          → AUC目标≥0.62
-# Token30: 极端低值窗口占比                  → AUC目标≥0.60
+# Step A-13【新增】: 自动特征筛选，剔除 AUC < 0.53 的低判别力 Token
 # =============================================================================
-from scipy.stats import rankdata as _rankdata
-print("\n  构造高判别力增强特征（Token26~30）...")
+exec(open('patch_feature_select.py', encoding='utf-8').read())
 
-# ── Token26: 归一化RMT信号能量比 ─────────────────────────────────────────
-# 绝对投影 |v1·x| 对高用电量用户天然偏大，与异常无关
-# 归一化：(v1·x)² / sum((vk·x)² for k=1..5)  纯看异常方向占比
-_v1_proj_sq   = (spec_tokens[:, :, 0] ** 2)               # (144, N)
-_total_energy = (spec_tokens[:, :, :5] ** 2).sum(axis=2) + 1e-8  # (144, N)
-_tok26 = (_v1_proj_sq / _total_energy).mean(axis=0).astype(np.float32)  # (N,)
-_t26_auc = max(_auc_fn(y, _tok26), _auc_fn(y, -_tok26))
-print(f"    Token26(归一化RMT能量比)   AUC={_t26_auc:.4f}  {'✅' if _t26_auc>0.55 else '⚠️'}")
-
-# ── Token27: 长期用电下降趋势 ─────────────────────────────────────────────
-# 窃电用户：初期正常，某时刻后后半段系统性下降 → 后半/前半 < 1
-_half = X.shape[1] // 2
-_tok27_raw = (X[:, _half:].mean(axis=1) /
-              (X[:, :_half].mean(axis=1).clip(1e-4) + 1e-8))  # (N,)
-# 下降比越大越异常（下降意味着 ratio<1，取负值使"异常更大"）
-_tok27 = (1.0 - _tok27_raw).astype(np.float32)
-_t27_auc = max(_auc_fn(y, _tok27), _auc_fn(y, -_tok27))
-print(f"    Token27(长期下降趋势)      AUC={_t27_auc:.4f}  {'✅' if _t27_auc>0.55 else '⚠️'}")
-
-# ── Token28: 跨用户百分位排名变化（早→晚） ───────────────────────────────
-# 同一时间窗口内用户消费排名，窃电用户排名系统性下滑
-_nw = X_seq14_ds.shape[1]   # 48
-_cpw = X_seq14_ds[:, :, 6].astype(np.float64)  # Token7用户均值时序 (N,48)
-_er  = np.zeros(X.shape[0], dtype=np.float32)
-_lr  = np.zeros(X.shape[0], dtype=np.float32)
-for _ww in range(_nw // 4):                     # 前1/4
-    _er += (_rankdata(_cpw[:, _ww]) / X.shape[0]).astype(np.float32)
-for _ww in range(3 * _nw // 4, _nw):            # 后1/4
-    _lr += (_rankdata(_cpw[:, _ww]) / X.shape[0]).astype(np.float32)
-_tok28 = _er / (_nw // 4) - _lr / (_nw // 4)   # 正数=排名下滑=异常
-_t28_auc = max(_auc_fn(y, _tok28), _auc_fn(y, -_tok28))
-print(f"    Token28(跨用户排名变化)    AUC={_t28_auc:.4f}  {'✅' if _t28_auc>0.55 else '⚠️'}")
-
-# ── Token29: RMT v1投影时序变化（后期均值 - 前期均值） ─────────────────────
-# 窃电持续：v1投影在后半段高于前半段（系统性异常加剧）
-_v1s = X_seq14_ds[:, :, 0]  # (N,48) 第1维RMT投影时序
-_tok29 = (_v1s[:, 3*_nw//4:].mean(axis=1) -
-          _v1s[:, :_nw//4].mean(axis=1)).astype(np.float32)  # (N,)
-_t29_auc = max(_auc_fn(y, _tok29), _auc_fn(y, -_tok29))
-print(f"    Token29(v1投影时序变化)    AUC={_t29_auc:.4f}  {'✅' if _t29_auc>0.55 else '⚠️'}")
-
-# ── Token30: 极端低值窗口占比 ─────────────────────────────────────────────
-# 用户自身历史中低于P10的窗口占比（窃电用户有大段接近零的时期）
-_um = X_seq14_ds[:, :, 6].astype(np.float64)  # (N,48)
-_p10 = np.percentile(_um, 10, axis=1, keepdims=True)
-_tok30 = (_um < _p10).mean(axis=1).astype(np.float32)  # (N,)
-_t30_auc = max(_auc_fn(y, _tok30), _auc_fn(y, -_tok30))
-print(f"    Token30(极端低值占比)      AUC={_t30_auc:.4f}  {'✅' if _t30_auc>0.55 else '⚠️'}")
-
-# ── 归一化 & 拼入（tiled to 48 steps） ─────────────────────────────────
-_new_g = np.stack([_tok26, _tok27, _tok28, _tok29, _tok30], axis=1)  # (N,5)
-for _ci in range(_new_g.shape[1]):
-    _c = _new_g[:, _ci]
-    _new_g[:, _ci] = (_c - _c.min()) / (_c.max() - _c.min() + 1e-8)
-_new_g_tiled = np.tile(_new_g[:, np.newaxis, :],
-                        (1, X_seq14_ds.shape[1], 1))   # (N,48,5)
-X_seq14_ds = np.concatenate([X_seq14_ds, _new_g_tiled], axis=2)
-FEAT_DIM   = X_seq14_ds.shape[2]
-print(f"  拼入 Token26~30 后形状: {X_seq14_ds.shape}  (FEAT_DIM={FEAT_DIM})")
-
-
+# 同步更新 DataLoader 中的 tensor（FEAT_DIM 已由 patch 更新）
 idx_tr14, idx_te14 = train_test_split(
     np.arange(len(y)), test_size=0.2, random_state=42, stratify=y
 )
@@ -1880,11 +1814,16 @@ POS_COUNT  = int((y == 1).sum())
 # EPOCHS: 50→80，配合早停充分训练
 # PATIENCE: 15→20，给AUC更多改善机会
 _raw_alpha    = 1.0 - POS_COUNT / (POS_COUNT + NEG_COUNT)
-AUTO_ALPHA    = max(_raw_alpha * 0.95, 0.80)   # 略收紧，避免极端正类损失爆炸
-GAMMA         = 3.0          # 2.0→3.0：更强聚焦难分异常样本
-MAX_RECALL_W  = 2.5          # 1.5→2.5：训练后期大幅提升召回权重，改善F1
-EPOCHS        = 80           # 50→80：配合早停，充分训练
-PATIENCE      = 15           # 15：搭配更长训练，给AUC更多改善机会
+AUTO_ALPHA    = max(_raw_alpha * 0.95, 0.80)
+# ── 【AUC优化】超参调整说明 ──────────────────────────────────────────
+# GAMMA 2.0：降低 Focal 聚焦强度，让模型学更多"普通难样本"而非只盯最难样本
+# MAX_RECALL_W 1.5：降低 recall 惩罚，优先保精确率 → AUC > F1
+# EPOCHS 120：更长训练，配合 CosineWarmRestart 多周期收敛
+# PATIENCE 20：给新特征更多收敛时间
+GAMMA         = 2.0
+MAX_RECALL_W  = 1.5
+EPOCHS        = 120
+PATIENCE      = 20
 
 print(f"  正样本: {POS_COUNT} | 负样本: {NEG_COUNT}")
 print(f"  AdaptiveFocal → alpha={AUTO_ALPHA:.4f}, gamma={GAMMA}, max_recall_w={MAX_RECALL_W}")
@@ -1924,11 +1863,13 @@ optimizer_dual = optim.AdamW(
 # 原因：OneCycleLR 在 LR 爬升阶段（epoch 8~16）会冲垮已学特征，导致 AUC 崩塌
 # CosineAnnealingWarmRestarts(T_0=10)：每10轮余弦重置，保持训练稳定
 # 注意：scheduler.step() 改为 epoch 后调用，而非每 batch 后
+# T_0=15, T_mult=2：15→30→60 轮，共覆盖 105 轮，配合 120 轮训练
+# 比 T_0=10 减少重置次数，每个周期内模型收敛更充分
 scheduler_dual = optim.lr_scheduler.CosineAnnealingWarmRestarts(
     optimizer_dual,
-    T_0     = 10,      # 每10个epoch余弦重置一次
-    T_mult  = 2,       # 重置周期倍增：10→20→40
-    eta_min = 1e-6,    # 最小学习率
+    T_0     = 15,
+    T_mult  = 2,
+    eta_min = 5e-7,
 )
 
 # ⚠️ torch.compile 在 Windows CPU 环境下需要 MSVC (cl.exe)，未安装时会在
