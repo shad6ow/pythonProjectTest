@@ -1853,7 +1853,8 @@ model_dual = DualPathTransformer(
     max_len    = 60
 ).to(device)
 # ⚠️ 强制禁用 UserGraphAttention（CPU上O(B²)，会让每epoch从150s变600s）
-_get_raw_model(model_dual)._graph_enabled = False
+# Windows CPU 不使用 torch.compile，直接访问模型属性
+model_dual._graph_enabled = False
 
 # ── 先统计参数量、初始化优化器（必须在 torch.compile 之前！）──────────
 def _get_raw_model(m):
