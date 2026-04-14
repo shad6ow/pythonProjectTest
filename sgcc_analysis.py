@@ -1777,7 +1777,8 @@ def train_one_epoch_dual(model, loader, optimizer, scheduler,
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
-        scheduler.step()
+        # ⚠️ 不在 batch 内调用 scheduler.step()
+        # CosineAnnealingWarmRestarts 必须在 epoch 结束后调用
         total_loss += loss.item() * len(y_batch)
         total      += len(y_batch)
     return total_loss / total
@@ -1823,7 +1824,7 @@ AUTO_ALPHA    = max(_raw_alpha * 0.95, 0.80)
 GAMMA         = 2.0
 MAX_RECALL_W  = 1.5
 EPOCHS        = 120
-PATIENCE      = 20
+PATIENCE      = 15
 
 print(f"  正样本: {POS_COUNT} | 负样本: {NEG_COUNT}")
 print(f"  AdaptiveFocal → alpha={AUTO_ALPHA:.4f}, gamma={GAMMA}, max_recall_w={MAX_RECALL_W}")
@@ -1896,8 +1897,8 @@ no_improve_dual = 0
 print(f"\n{'='*70}")
 print(f"  损失函数: AdaptiveFocal | alpha={AUTO_ALPHA:.4f} | "
       f"gamma={GAMMA} | max_recall_w={MAX_RECALL_W}")
-print(f"  调度器: OneCycleLR | max_lr=8e-4 | pct_start=0.15 | epochs={EPOCHS}")
-print(f"  模型: d_model=128 | layers=4 | dim_ff=512 | feat_dim={FEAT_DIM}")
+print(f"  调度器: CosineAnnealingWarmRestarts | T_0=15 T_mult=2 | eta_min=5e-7 | epochs={EPOCHS}")
+print(f"  模型: d_model=256 | layers=4 | dim_ff=512 | feat_dim={FEAT_DIM}")
 print(f"  早停: patience={PATIENCE} 轮")
 print(f"{'='*70}")
 print(f"{'Epoch':>5} | {'Loss':>10} | {'ValAUC':>7} | "
@@ -1915,8 +1916,9 @@ for epoch in range(1, EPOCHS + 1):
     )
     elapsed = time.time() - t0
 
-    # CosineAnnealingWarmRestarts 是 epoch 级调度（step 在 train_one_epoch_dual 内部已调用）
-    # 通知 AdaptiveFocalLoss 当前轮次，更新动态 recall_weight
+    # ✅ CosineAnnealingWarmRestarts：在 epoch 结束后调用 step(epoch)
+    # 传入 epoch-1 使第0轮从最大 LR 开始（官方推荐用法）
+    scheduler_dual.step(epoch - 1)
     criterion_dual.set_epoch(epoch, EPOCHS)
     cur_lr = optimizer_dual.param_groups[0]['lr']
 
