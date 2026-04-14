@@ -1829,16 +1829,25 @@ PATIENCE      = 15
 print(f"  正样本: {POS_COUNT} | 负样本: {NEG_COUNT}")
 print(f"  AdaptiveFocal → alpha={AUTO_ALPHA:.4f}, gamma={GAMMA}, max_recall_w={MAX_RECALL_W}")
 
+# ── 模型结构说明 ──────────────────────────────────────────────────────────
+# d_model=128: CPU 推理速度与 AUC 的最佳平衡点
+#   d_model=256 参数量5.4M 单epoch≈650s (×120=21h)，完全不可接受
+#   d_model=128 参数量1.4M 单epoch≈150s (×120= 5h)，可接受
+# num_layers=3: 减少1层，再提速 ~25%；SGCC 48步序列深度足够
+# dim_ff=256: 与 d_model 对齐，进一步压缩计算量
+# UserGraphAttention: O(B²) 开销极大，CPU 上直接禁用（epoch30启用会让每epoch增加400s）
 model_dual = DualPathTransformer(
-    feat_dim   = FEAT_DIM,   # 19
-    d_model    = 256,        # 128→256：更强表达能力，AUC提升关键
+    feat_dim   = FEAT_DIM,
+    d_model    = 128,
     nhead      = 4,
-    num_layers = 4,          # 3→4，加深网络
-    dim_ff     = 512,        # 256→512
-    dropout    = 0.1,        # 0.2→0.1：减小dropout，让模型更充分学习特征
-    win_size   = 8,          # 6→8：局部窗口扩大，捕捉更长异常模式
+    num_layers = 3,
+    dim_ff     = 256,
+    dropout    = 0.15,
+    win_size   = 8,
     max_len    = 60
 ).to(device)
+# ⚠️ 强制禁用 UserGraphAttention（CPU上O(B²)，会让每epoch从150s变600s）
+_get_raw_model(model_dual)._graph_enabled = False
 
 # ── 先统计参数量、初始化优化器（必须在 torch.compile 之前！）──────────
 def _get_raw_model(m):
@@ -1854,18 +1863,9 @@ criterion_dual = AdaptiveFocalLoss(
 optimizer_dual = optim.AdamW(
     model_dual.parameters(), lr=1e-3, weight_decay=1e-4   # 编译前取 parameters()
 )
-# 调度器：OneCycleLR（前15%升温到峰值8e-4，后85%余弦退火到8e-7）
-# max_lr 从 3e-3 降至 8e-4，避免高LR阶段 AUC 剧烈震荡
-# pct_start 从 0.3 降至 0.15，更快到达峰值后进入下降阶段
-# 在每个 batch 后调用 scheduler.step()，不是 epoch 后
-# 注意：batch_size 从 512→1024 后，steps_per_epoch 自动减半（DataLoader步数变少）
-# len(train_loader14) 已自动反映新 batch_size，无需手动调整
-# [修复C] 将 OneCycleLR 替换为 CosineAnnealingWarmRestarts
-# 原因：OneCycleLR 在 LR 爬升阶段（epoch 8~16）会冲垮已学特征，导致 AUC 崩塌
-# CosineAnnealingWarmRestarts(T_0=10)：每10轮余弦重置，保持训练稳定
-# 注意：scheduler.step() 改为 epoch 后调用，而非每 batch 后
-# T_0=15, T_mult=2：15→30→60 轮，共覆盖 105 轮，配合 120 轮训练
-# 比 T_0=10 减少重置次数，每个周期内模型收敛更充分
+# ── 调度器：CosineAnnealingWarmRestarts ──────────────────────────────────
+# T_0=15, T_mult=2：周期 15→30→60 轮，共覆盖 105 轮，配合 120 轮训练
+# scheduler.step() 在每个 epoch 结束后调用（非 batch 内），避免 LR 震荡崩塌
 scheduler_dual = optim.lr_scheduler.CosineAnnealingWarmRestarts(
     optimizer_dual,
     T_0     = 15,
@@ -1898,7 +1898,8 @@ print(f"\n{'='*70}")
 print(f"  损失函数: AdaptiveFocal | alpha={AUTO_ALPHA:.4f} | "
       f"gamma={GAMMA} | max_recall_w={MAX_RECALL_W}")
 print(f"  调度器: CosineAnnealingWarmRestarts | T_0=15 T_mult=2 | eta_min=5e-7 | epochs={EPOCHS}")
-print(f"  模型: d_model=256 | layers=4 | dim_ff=512 | feat_dim={FEAT_DIM}")
+print(f"  模型: d_model=128 | layers=3 | dim_ff=256 | feat_dim={FEAT_DIM}")
+print(f"  UserGraphAttention: 已禁用（CPU加速）")
 print(f"  早停: patience={PATIENCE} 轮")
 print(f"{'='*70}")
 print(f"{'Epoch':>5} | {'Loss':>10} | {'ValAUC':>7} | "
@@ -1927,11 +1928,7 @@ for epoch in range(1, EPOCHS + 1):
     history_dual['val_f1'].append(val_f1)
     history_dual['lr'].append(cur_lr)
 
-    # Epoch 30 后启用图注意力（模型基本收敛后 O(B²) 开销才值得）
-    # _get_raw_model：兼容 torch.compile 包装（._orig_mod）和普通模型
-    if epoch == 30 and not _get_raw_model(model_dual)._graph_enabled:
-        _get_raw_model(model_dual)._graph_enabled = True
-        print("  ⚡ Epoch 30: 启用 UserGraphAttention")
+    # UserGraphAttention CPU 模式下已禁用，无需动态启用
 
     mark = ' ✅' if val_auc > best_auc_dual else ''
     print(f"{epoch:>5} | {tr_loss:>10.6f} | {val_auc:>7.4f} | "
