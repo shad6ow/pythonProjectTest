@@ -1464,6 +1464,39 @@ _mo_rank_dev = _mo_mean - _mo_median_global                       # (N, NM)
 # 差分通道 ch6: 月度一阶差分（直接捕捉斜率变化）
 _mo_diff1 = np.diff(_mo_mean, axis=1, prepend=_mo_mean[:, :1])   # (N, NM)
 
+# ── ★ 核心新增特征：用户自身基准偏离（最强窃电信号）────────────────────
+# 理论：用前6个月为基准，后续月份相对基准的下降幅度直接量化窃电行为
+# 文献：Zheng et al. 2018 IEEE TSG；Nagi et al. 2010 CIRED
+_BASELINE_M = 6
+_baseline   = _mo_mean[:, :_BASELINE_M].mean(axis=1, keepdims=True) + 1e-6  # (N,1)
+
+# ch7: 每月消费相对自身基准的偏离率 (后期负值越大越可疑)
+_mo_vs_base = (_mo_mean - _baseline) / (np.abs(_baseline) + 1e-6)   # (N, NM)
+
+# ch8: 累积下降量 = 累计偏离量的前缀和（持续偷电的积分信号）
+_mo_cumdev  = np.cumsum(_mo_mean - _baseline, axis=1)                # (N, NM)
+
+# ch9: 跨用户同月百分位排名 [0,1]（窃电后排名持续下滑）
+from scipy.stats import rankdata as _rankdata
+_mo_pct = np.zeros((_N, _NM), dtype=np.float32)
+for _mr in range(_NM):
+    _r = _rankdata(_mo_mean[:, _mr])
+    _mo_pct[:, _mr] = (_r / _N).astype(np.float32)
+
+# ch10: 排名下降幅度（前半段排名均值 - 后半段排名均值，平铺）
+_half_nm   = _NM // 2
+_rank_drop = (_mo_pct[:, :_half_nm].mean(axis=1) -
+              _mo_pct[:, _half_nm:].mean(axis=1))   # (N,) 正=排名下滑=可疑
+_rank_tile = np.tile(_rank_drop[:, np.newaxis], (1, _NM))  # (N, NM)
+
+# 打印新特征 AUC
+from sklearn.metrics import roc_auc_score as _ras_m
+def _qauc_m(f): a = _ras_m(y, f); return max(a, 1 - a)
+print(f"  ch7(相对基准偏离率)  AUC={_qauc_m(_mo_vs_base.mean(axis=1)):.4f}  ← 目标≥0.68")
+print(f"  ch8(累积下降量)      AUC={_qauc_m(_mo_cumdev.mean(axis=1)):.4f}  ← 目标≥0.65")
+print(f"  ch9(跨用户百分位)    AUC={_qauc_m(_mo_pct.mean(axis=1)):.4f}  ← 目标≥0.65")
+print(f"  ch10(排名下降幅度)   AUC={_qauc_m(_rank_drop):.4f}  ← 目标≥0.68")
+
 # 归一化所有通道（RobustScaler 逐通道）
 from sklearn.preprocessing import RobustScaler as _RS
 
@@ -1474,14 +1507,18 @@ def _scale_ch(arr2d, clip=5.0):
     return np.clip(flat, -clip, clip).astype(np.float32)
 
 _mo_ch = np.stack([
-    _scale_ch(_mo_mean),      # ch0 月均消费
-    _scale_ch(_mo_std),       # ch1 月消费波动
-    _scale_ch(_mo_max),       # ch2 月最大值
-    _scale_ch(_mo_min),       # ch3 月最小值
-    _mo_zero,                 # ch4 零值比（已在[0,1]）
-    _scale_ch(_mo_rank_dev),  # ch5 跨用户排名偏差
-    _scale_ch(_mo_diff1),     # ch6 月度差分
-], axis=2)   # (N, NM, 7)
+    _scale_ch(_mo_mean),          # ch0 月均消费
+    _scale_ch(_mo_std),           # ch1 月消费波动
+    _scale_ch(_mo_max),           # ch2 月最大值
+    _scale_ch(_mo_min),           # ch3 月最小值
+    _mo_zero,                     # ch4 零值比 [0,1]
+    _scale_ch(_mo_rank_dev),      # ch5 跨用户排名偏差
+    _scale_ch(_mo_diff1),         # ch6 月度差分
+    _scale_ch(_mo_vs_base),       # ch7 ★ 相对自身基准偏离
+    _scale_ch(_mo_cumdev),        # ch8 ★ 累积下降量
+    _mo_pct,                      # ch9 ★ 跨用户百分位排名
+    _scale_ch(_rank_tile),        # ch10 ★ 排名下降幅度
+], axis=2)   # (N, NM, 11)
 
 # 追加用户级标量特征（从 X_seq14_ds 时间轴均值取，平铺到 NM 步）
 _scalar_feats = X_seq14_ds.mean(axis=1)   # (N, FEAT_DIM)
@@ -1490,14 +1527,14 @@ _scalar_tiled = np.tile(
 )   # (N, NM, FEAT_DIM)
 
 # 最终拼接：月度通道 + 用户标量特征
-X_mo_seq = np.concatenate([_mo_ch, _scalar_tiled], axis=2).astype(np.float32)
+X_mo_seq    = np.concatenate([_mo_ch, _scalar_tiled], axis=2).astype(np.float32)
 FEAT_DIM_MO = X_mo_seq.shape[2]
 N_STEPS_MO  = _NM   # 34
 
 print(f"  月度序列形状: {X_mo_seq.shape}")
 print(f"  时间步数: {N_STEPS_MO} 个月  特征维度: {FEAT_DIM_MO}")
-print(f"    ch0~6: 月度统计 (7维)")
-print(f"    ch7~:  用户标量特征 ({FEAT_DIM} 维，平铺)")
+print(f"    ch0~10: 月度统计+基准偏离 (11维)")
+print(f"    ch11~:  用户标量特征 ({FEAT_DIM} 维，平铺)")
 
 # ── 重建 DataLoader ────────────────────────────────────────────────────
 idx_tr14, idx_te14 = train_test_split(
