@@ -2195,23 +2195,25 @@ if HAS_XGB:
         return np.concatenate(all_feats, axis=0)
 
     print("  提取Transformer特征...")
-    feat_all = batch_extract_features(model_dual, X_seq14_ds, device)
+    # ✅ 使用 X_mo_seq（月度序列），与 Transformer 训练时输入一致
+    feat_all = batch_extract_features(model_dual, X_mo_seq, device)
     print(f"  Transformer特征维度: {feat_all.shape}")
 
-
-    # ── D-2: 增强手工统计特征（每用户 FEAT_DIM*8 维）────────────────
-    _X_raw = X_seq14_ds   # (N_USERS, 48, FEAT_DIM)
+    # ── D-2: 增强手工统计特征（基于月度序列）──────────────────────────
+    _X_raw  = X_mo_seq          # (N_USERS, N_MONTHS, FEAT_DIM_MO)
+    _N_STEPS = _X_raw.shape[1]  # 34 个月
+    _HALF    = _N_STEPS // 2    # 17
     hand_feats = np.concatenate([
-        _X_raw.mean(axis=1),                                              # 均值
-        _X_raw.std(axis=1),                                               # 标准差
-        _X_raw.max(axis=1),                                               # 最大值
-        _X_raw.min(axis=1),                                               # 最小值
-        np.percentile(_X_raw, 25, axis=1),                                # Q1
-        np.percentile(_X_raw, 75, axis=1),                                # Q3
-        _X_raw[:, 24:, :].mean(axis=1) - _X_raw[:, :24, :].mean(axis=1), # 后半-前半（趋势）
-        _X_raw.argmax(axis=1).astype(np.float32) / 48,                   # 最大值位置（归一化）
+        _X_raw.mean(axis=1),                                                   # 均值
+        _X_raw.std(axis=1),                                                    # 标准差
+        _X_raw.max(axis=1),                                                    # 最大值
+        _X_raw.min(axis=1),                                                    # 最小值
+        np.percentile(_X_raw, 25, axis=1),                                     # Q1
+        np.percentile(_X_raw, 75, axis=1),                                     # Q3
+        _X_raw[:, _HALF:, :].mean(axis=1) - _X_raw[:, :_HALF, :].mean(axis=1), # 后半-前半趋势
+        _X_raw.argmax(axis=1).astype(np.float32) / _N_STEPS,                  # 最大值位置
     ], axis=1)
-    print(f"  增强手工特征维度: {hand_feats.shape}  (FEAT_DIM×8={FEAT_DIM*8})")
+    print(f"  增强手工特征维度: {hand_feats.shape}  (FEAT_DIM_MO×8={FEAT_DIM_MO*8})")
 
     # ── D-3: 拼接 → XGBoost训练 ─────────────────────────────────────
     X_xgb    = np.concatenate([feat_all, hand_feats, rmt_sgp_features], axis=1)
