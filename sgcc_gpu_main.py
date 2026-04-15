@@ -37,7 +37,7 @@ if device.type == 'cuda':
 # ── 超参配置 ─────────────────────────────────────────────────────────────────
 CFG = dict(
     # 数据
-    data_path       = 'data set.csv',
+            data_path       = r'C:\Users\wb.zhoushujie\Desktop\data set.csv',
     test_size       = 0.2,
     random_seed     = 42,
     # RMT
