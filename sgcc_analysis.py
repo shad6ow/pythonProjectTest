@@ -118,12 +118,14 @@ def preprocess_sgcc(df):
 
     X = features_scaled.astype(np.float32)
     y = labels_arr.astype(np.int64)
+    # ★ 保存原始插值数据（未归一化），用于计算基准偏离特征
+    X_raw = features_filled.values.astype(np.float32)
 
     print(f"  预处理完成: X.shape={X.shape}, y.shape={y.shape}")
     print(f"  X 值域: [{X.min():.3f}, {X.max():.3f}]")
-    return X, y, scaler
+    return X, y, scaler, X_raw
 
-X, y, scaler = preprocess_sgcc(df)
+X, y, scaler, X_raw = preprocess_sgcc(df)
 
 # =============================================================================
 # 4. 可视化：正常 vs 异常用户的用电模式（使用预处理后数据）
@@ -1464,17 +1466,30 @@ _mo_rank_dev = _mo_mean - _mo_median_global                       # (N, NM)
 # 差分通道 ch6: 月度一阶差分（直接捕捉斜率变化）
 _mo_diff1 = np.diff(_mo_mean, axis=1, prepend=_mo_mean[:, :1])   # (N, NM)
 
-# ── ★ 核心新增特征：用户自身基准偏离（最强窃电信号）────────────────────
-# 理论：用前6个月为基准，后续月份相对基准的下降幅度直接量化窃电行为
-# 文献：Zheng et al. 2018 IEEE TSG；Nagi et al. 2010 CIRED
+# ── ★ 核心新增特征：用原始数据计算基准偏离（必须在归一化前）─────────────
+# 关键：Z-score 后基准≈0，比值无意义；必须用 X_raw（原始插值未归一化数据）
 _BASELINE_M = 6
-_baseline   = _mo_mean[:, :_BASELINE_M].mean(axis=1, keepdims=True) + 1e-6  # (N,1)
+_DAYSPM_RAW = 30
+_NM_RAW     = X_raw.shape[1] // _DAYSPM_RAW   # ≈34
 
-# ch7: 每月消费相对自身基准的偏离率 (后期负值越大越可疑)
-_mo_vs_base = (_mo_mean - _baseline) / (np.abs(_baseline) + 1e-6)   # (N, NM)
+# 计算原始月均消费矩阵
+_mo_raw = np.zeros((_N, _NM_RAW), dtype=np.float32)
+for _mr2 in range(_NM_RAW):
+    _s2 = _mr2 * _DAYSPM_RAW
+    _e2 = min(_s2 + _DAYSPM_RAW, X_raw.shape[1])
+    _mo_raw[:, _mr2] = X_raw[:, _s2:_e2].mean(axis=1)
 
-# ch8: 累积下降量 = 累计偏离量的前缀和（持续偷电的积分信号）
-_mo_cumdev  = np.cumsum(_mo_mean - _baseline, axis=1)                # (N, NM)
+# 用原始数据的前6个月为基准（单位：kWh，有绝对意义）
+_baseline_raw = _mo_raw[:, :_BASELINE_M].mean(axis=1, keepdims=True) + 1e-3  # (N,1)
+
+# ch7: 每月消费相对自身基准的偏离率（原始kWh，有物理意义）
+_mo_vs_base = (_mo_raw - _baseline_raw) / (np.abs(_baseline_raw) + 1e-3)    # (N, NM)
+# 对齐到 _NM（34步）
+if _mo_vs_base.shape[1] != _NM:
+    _mo_vs_base = _mo_vs_base[:, :_NM]
+
+# ch8: 累积下降量（原始kWh累积偏离）
+_mo_cumdev = np.cumsum(_mo_raw - _baseline_raw, axis=1)[:, :_NM]    # (N, NM)
 
 # ch9: 跨用户同月百分位排名 [0,1]（窃电后排名持续下滑）
 from scipy.stats import rankdata as _rankdata
