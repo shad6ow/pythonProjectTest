@@ -351,8 +351,6 @@ def marchenko_pastur_bounds(X_window, sigma2=None):
     """
     自适应 Marchenko-Pastur 上下界（MAD 估计 σ²，抗野值）：
 
-    $\\hat{\\sigma}^2 = \\left(\\frac{\\text{MAD}(X)}{0.6745}\\right)^2$
-
     $\\lambda_{\\pm} = \\hat{\\sigma}^2 (1 \\pm \\sqrt{\\gamma})^2$
 
     X_window: (n, T)  n=用户数, T=时间步

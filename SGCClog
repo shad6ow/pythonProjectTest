@@ -1,0 +1,182 @@
+
+C:\Users\wb.zhoushujie\PyCharmMiscProject\.venv\Scripts\python.exe C:\Users\wb.zhoushujie\PyCharmMiscProject\sgcc_phase3_transformer.py
+======================================================================
+Phase 3: Transformer 改良版 + 完整消融/对比实验
+  设备=cpu
+======================================================================
+
+--- Step 1: 加载数据 ---
+  用户数=42372, 天数=1034
+
+--- Step 2: 缺失模式特征 ---
+  缺失模式特征: 9维
+
+--- Step 3: 数据预处理 ---
+  填充后范围: [0.00, 800003.31]
+
+--- Step 4: 月度聚合 ---
+  月度聚合: 34个月
+
+--- Step 5: 日历特征 ---
+  日历特征: 7维
+
+--- Step 6: 深层统计特征 ---
+  深层统计特征: 21维
+
+--- Step 7: TCN-CPD ---
+  TCN-CPD: 20维
+
+--- Step 8: ISCT 变点特征 ---
+  ISCT-CPD: 8维 (保留8/8)
+
+--- Step 9: RMT 2特征 ---
+  RMT特征: 2维  耗时=0.1s
+    B_snr_global AUC=0.5527
+    A_late_signal AUC=0.5307
+
+--- Step 10: 组装 GBDT 特征矩阵 ---
+  G1 Baseline 特征: 712维
+  G2 +RMT 特征: 714维
+
+--- Step 11: 构建 Transformer 输入 + 模型 ---
+  Transformer输入: (42372, 34, 34)  (34维通道, 34个月)
+
+--- Step 12: 训练 Transformer ---
+  参数量=841,473  feat_dim=34  epochs=60
+Epoch |       Loss |     AUC |     F1 |       LR
+--------------------------------------------------
+    1 |   0.051914 |  0.7236 | 0.3052 | 1.00e-03 *BEST*
+    2 |   0.046957 |  0.7648 | 0.3421 | 9.94e-04 *BEST*
+    3 |   0.045573 |  0.7708 | 0.3509 | 9.76e-04 *BEST*
+    4 |   0.044557 |  0.7774 | 0.3652 | 9.46e-04 *BEST*
+    5 |   0.044346 |  0.7732 | 0.3485 | 9.05e-04
+    6 |   0.043231 |  0.7858 | 0.3625 | 8.54e-04 *BEST*
+    7 |   0.042650 |  0.7976 | 0.3769 | 7.94e-04 *BEST*
+   10 |   0.041142 |  0.7927 | 0.3922 | 5.78e-04
+   15 |   0.036477 |  0.7915 | 0.4137 | 2.07e-04
+
+Early stop epoch=7
+
+[OK] Transformer done: best AUC=0.7976 @ epoch 7
+
+--- Step 13: Transformer 256维 -> PCA 16维 ---
+  Transformer原始特征: (42372, 256)
+  PCA 16维: 方差解释率=0.9615 (96.2%)
+  trans_pca16 shape: (42372, 16)
+  G3 +RMT+Trans_PCA16 特征: 730维
+
+  Transformer 单独 AUC (80/20 val): 0.7976
+
+======================================================================
+Step 14: Ablation - G1 vs G2 vs G3
+======================================================================
+
+>> G1: Baseline
+    [G1] Fold 1: Cat=0.8737 XGB=0.8693 LGB=0.8740
+    [G1] Fold 2: Cat=0.8606 XGB=0.8635 LGB=0.8623
+    [G1] Fold 3: Cat=0.8722 XGB=0.8661 LGB=0.8693
+    [G1] Fold 4: Cat=0.8706 XGB=0.8690 LGB=0.8738
+    [G1] Fold 5: Cat=0.8644 XGB=0.8691 LGB=0.8716
+    [G1] OOF: Cat=0.8683+/-0.0050  XGB=0.8674+/-0.0023  LGB=0.8702+/-0.0043
+    [G1] 集成 OOF AUC=0.8731  F1=0.5090
+
+>> G2: +RMT
+    [G2] Fold 1: Cat=0.8758 XGB=0.8697 LGB=0.8722
+    [G2] Fold 2: Cat=0.8647 XGB=0.8608 LGB=0.8663
+    [G2] Fold 3: Cat=0.8707 XGB=0.8658 LGB=0.8688
+    [G2] Fold 4: Cat=0.8703 XGB=0.8693 LGB=0.8742
+    [G2] Fold 5: Cat=0.8702 XGB=0.8665 LGB=0.8696
+    [G2] OOF: Cat=0.8703+/-0.0035  XGB=0.8664+/-0.0032  LGB=0.8702+/-0.0027
+    [G2] 集成 OOF AUC=0.8730  F1=0.5112
+
+>> G3: +RMT+Trans_PCA16
+    [G3] Fold 1: Cat=0.8741 XGB=0.8742 LGB=0.8810
+    [G3] Fold 2: Cat=0.8664 XGB=0.8642 LGB=0.8664
+    [G3] Fold 3: Cat=0.8732 XGB=0.8733 LGB=0.8711
+    [G3] Fold 4: Cat=0.8744 XGB=0.8754 LGB=0.8818
+    [G3] Fold 5: Cat=0.8704 XGB=0.8679 LGB=0.8746
+    [G3] OOF: Cat=0.8717+/-0.0030  XGB=0.8710+/-0.0043  LGB=0.8750+/-0.0059
+    [G3] 集成 OOF AUC=0.8762  F1=0.5143
+
+======================================================================
+Step 15: 基线对比实验（有监督分类器 + 无监督异常检测）
+======================================================================
+
+--- 15a: 有监督分类器（同样G3特征, 5折OOF）---
+  Fold 1: RF=0.8221(29s) LR=0.5743(55s) MLP=0.5880(19s)
+  Fold 2: RF=0.8158(37s) LR=0.5631(60s) MLP=0.6059(12s)
+  Fold 3: RF=0.8220(30s) LR=0.5595(48s) MLP=0.5878(15s)
+  Fold 4: RF=0.8240(27s) LR=0.5582(46s) MLP=0.6113(22s)
+  Fold 5: RF=0.8261(29s) LR=0.5594(40s) MLP=0.5825(10s)
+
+  有监督分类器 OOF 汇总:
+    Random Forest:       AUC=0.8220  F1=0.3891
+    Logistic Regression: AUC=0.5600  F1=0.1775
+    MLP (128-64):        AUC=0.5930  F1=0.2889
+
+--- 15b: 无监督异常检测（IF / LOF, 作为参考下界）---
+  Fold 1: IF=0.6738(2s) LOF=0.5954(17s)
+  Fold 2: IF=0.6735(2s) LOF=0.5823(17s)
+  Fold 3: IF=0.6582(2s) LOF=0.5878(17s)
+  Fold 4: IF=0.6701(2s) LOF=0.5978(17s)
+  Fold 5: IF=0.6610(2s) LOF=0.5795(17s)
+
+  无监督基线 OOF 汇总:
+    Isolation Forest:  AUC=0.6673  F1=0.2376
+    LOF:               AUC=0.5886  F1=0.1984
+
+======================================================================
+Step 16: 完整对比实验表
+======================================================================
+
+========================================================================
+                         消融实验结果
+========================================================================
+配置                            特征维度   OOF AUC    OOF F1
+------------------------------------------------------------------------
+G1: Baseline                   712    0.8731    0.5090
+G2: +RMT                       714    0.8730    0.5112
+G3: +RMT+Trans_PCA16           730    0.8762    0.5143
+------------------------------------------------------------------------
+G2-G1 (RMT gain)                +2   -0.0000   +0.0022
+G3-G2 (Trans gain)             +16   +0.0031   +0.0030
+G3-G1 (Total gain)             +18   +0.0031   +0.0052
+========================================================================
+
+==============================================================================
+          完整模型对比实验 (公平对比: 同样G3特征矩阵)
+==============================================================================
+Model                               Type           OOF AUC    OOF F1
+------------------------------------------------------------------------------
+Logistic Regression (G3)            Supervised      0.5600    0.1775
+MLP (G3)                            Supervised      0.5930    0.2889
+Random Forest (G3)                  Supervised      0.8220    0.3891
+Transformer (standalone)            Supervised      0.7976         -
+CatBoost (G3)                       GBDT            0.8717         -
+XGBoost (G3)                        GBDT            0.8710         -
+LightGBM (G3)                       GBDT            0.8750         -
+Ours (RMT+Trans+GBDT Ensemble)      Ensemble        0.8762    0.5143
+------------------------------------------------------------------------------
+Isolation Forest (G3)               Unsuperv.       0.6673    0.2376
+LOF (G3)                            Unsuperv.       0.5886    0.1984
+==============================================================================
+
+Total time: 204.2 min
+Phase 3 Done!
+
+======================================================================
+Step 17: 生成可视化图表
+======================================================================
+[OK] 图1 消融实验柱状图 已保存: C:\Users\wb.zhoushujie\PyCharmMiscProject\results\sgcc_fig1_ablation.png
+[OK] 图2 模型对比横向柱状图 已保存: C:\Users\wb.zhoushujie\PyCharmMiscProject\results\sgcc_fig2_model_comparison.png
+[OK] 图3 GBDT组件热力图 已保存: C:\Users\wb.zhoushujie\PyCharmMiscProject\results\sgcc_fig3_gbdt_heatmap.png
+[OK] 图4 消融增量贡献图 已保存: C:\Users\wb.zhoushujie\PyCharmMiscProject\results\sgcc_fig4_ablation_increments.png
+
+所有 SGCC 可视化图表已生成完毕！
+图表保存目录: C:\Users\wb.zhoushujie\PyCharmMiscProject\results
+  - sgcc_fig1_ablation.png         消融实验柱状图
+  - sgcc_fig2_model_comparison.png  完整模型对比横向柱状图
+  - sgcc_fig3_gbdt_heatmap.png      GBDT组件性能热力图
+  - sgcc_fig4_ablation_increments.png 消融增量贡献图
+
+Process finished with exit code 0
