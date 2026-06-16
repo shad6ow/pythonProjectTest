@@ -1,0 +1,62 @@
+[
+  {
+    "CONS_NO": "FA12E44A8CEC7A9A5C9974A9268D7969",
+    "g3_score": 42371.33203125,
+    "b_user_score": 0.9871722,
+    "pred_interval": [
+      32,
+      33
+    ],
+    "interval_confidence": 0.4647625088691711,
+    "top3_attention_months": [
+      33,
+      32,
+      1
+    ],
+    "top3_attention_values": [
+      0.7416113,
+      0.18791372,
+      0.009812262
+    ]
+  },
+  {
+    "CONS_NO": "80211A138337A7DA452C7755E0405CBC",
+    "g3_score": 42369.328125,
+    "b_user_score": 0.95508933,
+    "pred_interval": [
+      25,
+      25
+    ],
+    "interval_confidence": 0.6872700452804565,
+    "top3_attention_months": [
+      25,
+      32,
+      33
+    ],
+    "top3_attention_values": [
+      0.68727005,
+      0.081183895,
+      0.03889925
+    ]
+  },
+  {
+    "CONS_NO": "2511A5AF2864600B66AB339A8E5F045E",
+    "g3_score": 42367.34375,
+    "b_user_score": 0.9873969,
+    "pred_interval": [
+      32,
+      33
+    ],
+    "interval_confidence": 0.477930337190628,
+    "top3_attention_months": [
+      32,
+      33,
+      31
+    ],
+    "top3_attention_values": [
+      0.67193055,
+      0.28393012,
+      0.011499701
+    ]
+  }
+]

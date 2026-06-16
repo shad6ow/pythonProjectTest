@@ -1,0 +1,15 @@
+{
+  "n_users": 42372,
+  "n_months": 34,
+  "feat_dim": 34,
+  "positive_count": 3615,
+  "negative_count": 38757,
+  "feature_file": "C:\\Users\\wb.zhoushujie\\PyCharmMiscProject\\results\\phase4_pointb_v3_selfsup\\seed11\\pointb_v3_selfsup_features.csv",
+  "metrics_file": "C:\\Users\\wb.zhoushujie\\PyCharmMiscProject\\results\\phase4_pointb_v3_selfsup\\seed11\\pointb_v3_selfsup_metrics.json",
+  "checkpoint": "C:\\Users\\wb.zhoushujie\\PyCharmMiscProject\\results\\phase4_pointb_v3_selfsup\\seed11\\pointb_v3_selfsup_model.pth",
+  "warmup_epochs": 5,
+  "epochs": 20,
+  "pseudo_normal_frac": 0.6,
+  "month_pos_weight": 4.0,
+  "elapsed_sec": 1590.31103
+}

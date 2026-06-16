@@ -1,0 +1,129 @@
+{
+  "note": "v3 纯自监督定位: 训练不使用真实标签, 与判别模块构成并联。",
+  "n_seeds": 5,
+  "seed_files": [
+    "results\\phase4_pointb_v3_selfsup\\pointb_v3_selfsup_metrics.json",
+    "results\\phase4_pointb_v3_selfsup\\seed11\\pointb_v3_selfsup_metrics.json",
+    "results\\phase4_pointb_v3_selfsup\\seed22\\pointb_v3_selfsup_metrics.json",
+    "results\\phase4_pointb_v3_selfsup\\seed33\\pointb_v3_selfsup_metrics.json",
+    "results\\phase4_pointb_v3_selfsup\\seed44\\pointb_v3_selfsup_metrics.json"
+  ],
+  "scalar_metrics": {
+    "selfsup_mean_iou": {
+      "mean": 0.778132,
+      "std": 0.021462360541189322,
+      "ci95": [
+        0.7514829595995363,
+        0.8047810404004638
+      ],
+      "n": 5
+    },
+    "selfsup_pa_f1": {
+      "mean": 0.8608480000000001,
+      "std": 0.02606742545783914,
+      "ci95": [
+        0.828481016283141,
+        0.8932149837168591
+      ],
+      "n": 5
+    },
+    "deviation_baseline_mean_iou": {
+      "mean": 0.651416,
+      "std": 0.016247192988328767,
+      "ci95": [
+        0.6312424453945236,
+        0.6715895546054764
+      ],
+      "n": 5
+    },
+    "uniform_baseline_mean_iou": {
+      "mean": 0.1166,
+      "std": 0.0034708572428148055,
+      "ci95": [
+        0.11229036151869207,
+        0.12090963848130792
+      ],
+      "n": 5
+    },
+    "random_interval_mean_iou": {
+      "mean": 0.09326,
+      "std": 0.004286647874505204,
+      "ci95": [
+        0.0879374236612502,
+        0.0985825763387498
+      ],
+      "n": 5
+    },
+    "max_attn_separation": {
+      "mean": 0.031296000000000004,
+      "std": 0.004779103472409862,
+      "ci95": [
+        0.02536195927461808,
+        0.03723004072538193
+      ],
+      "n": 5
+    }
+  },
+  "selfsup_mean_iou_by_shape": {
+    "sudden_drop": {
+      "mean": 0.7538959999999999,
+      "std": 0.039980973349832256,
+      "ci95": [
+        0.704253064778369,
+        0.8035389352216308
+      ],
+      "n": 5
+    },
+    "sustained_low": {
+      "mean": 0.9369780000000001,
+      "std": 0.0218260720240725,
+      "ci95": [
+        0.9098773521455069,
+        0.9640786478544933
+      ],
+      "n": 5
+    },
+    "zero": {
+      "mean": 0.8272599999999999,
+      "std": 0.037878633159077954,
+      "ci95": [
+        0.7802274649052054,
+        0.8742925350947943
+      ],
+      "n": 5
+    },
+    "slow_drift": {
+      "mean": 0.5900479999999999,
+      "std": 0.026621731160839258,
+      "ci95": [
+        0.5569927548477265,
+        0.6231032451522733
+      ],
+      "n": 5
+    }
+  },
+  "paired_significance": {
+    "selfsup_vs_deviation": {
+      "statistic": 186137.0,
+      "p_value": 2.6911063616815813e-123,
+      "median_diff": 0.0,
+      "direction": "tie",
+      "n_pairs": 2500
+    },
+    "selfsup_vs_uniform": {
+      "statistic": 59317.0,
+      "p_value": 0.0,
+      "median_diff": 0.85294,
+      "direction": "selfsup higher",
+      "n_pairs": 2500
+    },
+    "selfsup_vs_random_interval": {
+      "statistic": 35833.0,
+      "p_value": 0.0,
+      "median_diff": 1.0,
+      "direction": "selfsup higher",
+      "n_pairs": 2500
+    },
+    "pooled_n_users": 2500
+  }
+}

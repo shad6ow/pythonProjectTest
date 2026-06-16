@@ -1,0 +1,26 @@
+{
+  "join_coverage": {
+    "df_a_rows": 42372,
+    "df_b_rows": 42372,
+    "matched": 42372,
+    "unmatched_A": 0,
+    "unmatched_B": 0
+  },
+  "coverage_table": {
+    "g3_positive_cohort": 3615,
+    "interval_confidence_median_in_cohort": 0.1060187108814716,
+    "confident_contiguous_count": 1807,
+    "confident_contiguous_fraction": 0.49986168741355463,
+    "definition": "interval_confidence > cohort median AND pred_interval_end >= pred_interval_start"
+  },
+  "case_study_refs": [
+    "FA12E44A8CEC7A9A5C9974A9268D7969",
+    "80211A138337A7DA452C7755E0405CBC",
+    "2511A5AF2864600B66AB339A8E5F045E"
+  ],
+  "g3_reference": {
+    "AUC": 0.875983,
+    "F1": 0.516921
+  },
+  "note": "Point B localizes/characterizes anomalies; it does NOT improve G3 global AUC/F1 (AUC 0.875983, F1 0.516921 unchanged)."
+}

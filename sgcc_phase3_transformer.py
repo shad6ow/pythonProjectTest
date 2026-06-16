@@ -31,6 +31,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 np.random.seed(42)
 torch.manual_seed(42)
 
+SKIP_EXTRA_COMPARISON = True
+
 DATA_PATH = r'C:\Users\wb.zhoushujie\Desktop\data set.csv'
 
 print("=" * 70)
@@ -164,16 +166,15 @@ print(f"  月度聚合: {NM}个月")
 # Step 5: 日历特征
 # =============================================================================
 print("\n--- Step 5: 日历特征 ---")
-weekday_mean_arr = np.nan_to_num(np.nanmean(np.where(weekday_mask[None,:], X_raw, np.nan), axis=1), 0).astype(np.float32)
-weekend_mean_arr = np.nan_to_num(np.nanmean(np.where(weekend_mask[None,:], X_raw, np.nan), axis=1), 0).astype(np.float32)
-wd_std_arr = np.nan_to_num(np.nanstd(np.where(weekday_mask[None,:], X_raw, np.nan), axis=1), 0).astype(np.float32)
-we_std_arr = np.nan_to_num(np.nanstd(np.where(weekend_mask[None,:], X_raw, np.nan), axis=1), 0).astype(np.float32)
+weekday_mean_arr = X_raw[:, weekday_mask].mean(axis=1).astype(np.float32)
+weekend_mean_arr = X_raw[:, weekend_mask].mean(axis=1).astype(np.float32)
+wd_std_arr = X_raw[:, weekday_mask].std(axis=1).astype(np.float32)
+we_std_arr = X_raw[:, weekend_mask].std(axis=1).astype(np.float32)
 monthly_avg_by_cal = np.zeros((N_USERS, 12), dtype=np.float32)
 for m_cal in range(12):
     m_mask = (month_of_year == m_cal+1)
     if m_mask.sum() > 0:
-        monthly_avg_by_cal[:, m_cal] = np.nan_to_num(
-            np.nanmean(np.where(m_mask[None,:], X_raw, np.nan), axis=1), 0).astype(np.float32)
+        monthly_avg_by_cal[:, m_cal] = X_raw[:, m_mask].mean(axis=1).astype(np.float32)
 summer_avg = monthly_avg_by_cal[:, [5,6,7]].mean(axis=1)
 winter_avg = monthly_avg_by_cal[:, [11,0,1]].mean(axis=1)
 summer_winter_ratio = summer_avg / (winter_avg + 1e-6)
@@ -766,6 +767,10 @@ def run_oof_ensemble(X_feat, y, group_name, n_splits=5):
     return {
         'ens_auc': ens_auc, 'best_f1': best_f1,
         'cat_auc': cat_mean, 'xgb_auc': xgb_mean, 'lgb_auc': lgb_mean,
+        'cat_oof_auc': auc_c, 'xgb_oof_auc': auc_x, 'lgb_oof_auc': auc_l,
+        'oof_cat': oof_cat,
+        'oof_xgb': oof_xgb,
+        'oof_lgb': oof_lgb,
         'oof_rank': oof_rank,
     }
 
@@ -792,7 +797,6 @@ print("=" * 70)
 
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.neighbors import LocalOutlierFactor
-# from sklearn.svm import OneClassSVM, SVC  # 已注释：SVM 耗时过长且效果不佳
 from sklearn.linear_model import LogisticRegression
 from sklearn.neural_network import MLPClassifier
 
@@ -802,146 +806,15 @@ def _best_f1(y_true, scores):
     f1s = 2 * prec * rec / (prec + rec + 1e-8)
     return f1s.max()
 
-# 对 G3 特征做 RobustScaler（LR/MLP 对尺度敏感）
-from sklearn.preprocessing import RobustScaler as RS2
-X_g3_scaled = RS2().fit_transform(X_g3)
+auc_rf_oof = auc_lr_oof = auc_mlp_oof = 0.0
+f1_rf = f1_lr = f1_mlp = 0.0
+auc_if_oof = auc_lof_oof = 0.0
+f1_if = f1_lof = 0.0
 
-# # 为 OCSVM 和 SVM-RBF 做 PCA 降维（已注释：SVM 相关实验已移除）
-# pca_svm = PCA(n_components=32, random_state=42)
-# X_g3_pca32 = pca_svm.fit_transform(X_g3_scaled).astype(np.float32)
-
-skf_ad = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
-# ---------- 15a: 有监督分类器对比（公平对比：同样的G3特征矩阵） ----------
-print("\n--- 15a: 有监督分类器（同样G3特征, 5折OOF）---")
-
-# oof_svc     = np.zeros(N_USERS, dtype=np.float64)   # SVM (RBF) — 已注释
-oof_rf      = np.zeros(N_USERS, dtype=np.float64)   # Random Forest
-oof_lr      = np.zeros(N_USERS, dtype=np.float64)   # Logistic Regression
-oof_mlp     = np.zeros(N_USERS, dtype=np.float64)   # MLP
-
-for fold_i, (tr_idx, va_idx) in enumerate(skf_ad.split(X_g3, labels)):
-    y_tr, y_va = labels[tr_idx], labels[va_idx]
-
-    # --- SVM (RBF) —— 已注释（耗时过长，AUC仅0.51） ---
-    # t0 = time.time()
-    # svc = SVC(kernel='rbf', gamma='scale', C=1.0, probability=True,
-    #           class_weight='balanced', random_state=42)
-    # svc.fit(X_g3_pca32[tr_idx], y_tr)
-    # oof_svc[va_idx] = svc.predict_proba(X_g3_pca32[va_idx])[:, 1]
-    # t_svc = time.time() - t0
-
-    # --- Random Forest ---
-    t0 = time.time()
-    rf = RandomForestClassifier(n_estimators=300, max_depth=12,
-                                 class_weight='balanced',
-                                 random_state=42+fold_i, n_jobs=-1)
-    rf.fit(X_g3[tr_idx], y_tr)
-    oof_rf[va_idx] = rf.predict_proba(X_g3[va_idx])[:, 1]
-    t_rf = time.time() - t0
-
-    # --- Logistic Regression ---
-    t0 = time.time()
-    lr = LogisticRegression(C=1.0, max_iter=1000, class_weight='balanced',
-                            solver='lbfgs', random_state=42)
-    lr.fit(X_g3_scaled[tr_idx], y_tr)
-    oof_lr[va_idx] = lr.predict_proba(X_g3_scaled[va_idx])[:, 1]
-    t_lr = time.time() - t0
-
-    # --- MLP ---
-    t0 = time.time()
-    mlp = MLPClassifier(hidden_layer_sizes=(128, 64), activation='relu',
-                         max_iter=200, early_stopping=True,
-                         validation_fraction=0.1,
-                         random_state=42+fold_i)
-    mlp.fit(X_g3_scaled[tr_idx], y_tr)
-    oof_mlp[va_idx] = mlp.predict_proba(X_g3_scaled[va_idx])[:, 1]
-    t_mlp = time.time() - t0
-
-    # auc_svc_f = roc_auc_score(y_va, oof_svc[va_idx])
-    auc_rf_f  = roc_auc_score(y_va, oof_rf[va_idx])
-    auc_lr_f  = roc_auc_score(y_va, oof_lr[va_idx])
-    auc_mlp_f = roc_auc_score(y_va, oof_mlp[va_idx])
-    print(f"  Fold {fold_i+1}: RF={auc_rf_f:.4f}({t_rf:.0f}s) "
-          f"LR={auc_lr_f:.4f}({t_lr:.0f}s) MLP={auc_mlp_f:.4f}({t_mlp:.0f}s)")
-
-# auc_svc_oof = roc_auc_score(labels, oof_svc)
-auc_rf_oof  = roc_auc_score(labels, oof_rf)
-auc_lr_oof  = roc_auc_score(labels, oof_lr)
-auc_mlp_oof = roc_auc_score(labels, oof_mlp)
-
-# f1_svc = _best_f1(labels, oof_svc)
-f1_rf  = _best_f1(labels, oof_rf)
-f1_lr  = _best_f1(labels, oof_lr)
-f1_mlp = _best_f1(labels, oof_mlp)
-
-print(f"\n  有监督分类器 OOF 汇总:")
-# print(f"    SVM (RBF, PCA32):    AUC={auc_svc_oof:.4f}  F1={f1_svc:.4f}")
-print(f"    Random Forest:       AUC={auc_rf_oof:.4f}  F1={f1_rf:.4f}")
-print(f"    Logistic Regression: AUC={auc_lr_oof:.4f}  F1={f1_lr:.4f}")
-print(f"    MLP (128-64):        AUC={auc_mlp_oof:.4f}  F1={f1_mlp:.4f}")
-
-# ---------- 15b: 无监督异常检测基线（作为参考下界）----------
-print("\n--- 15b: 无监督异常检测（IF / LOF, 作为参考下界）---")
-
-oof_if  = np.zeros(N_USERS, dtype=np.float64)
-oof_lof = np.zeros(N_USERS, dtype=np.float64)
-# oof_ocsvm = np.zeros(N_USERS, dtype=np.float64)  # 已注释：OCSVM 耗时过长
-
-for fold_i, (tr_idx, va_idx) in enumerate(skf_ad.split(X_g3, labels)):
-    X_tr_ad = X_g3_scaled[tr_idx]
-    X_va_ad = X_g3_scaled[va_idx]
-    # X_tr_pca = X_g3_pca32[tr_idx]  # 已注释：仅 OCSVM 使用
-    # X_va_pca = X_g3_pca32[va_idx]
-
-    # Isolation Forest
-    t0 = time.time()
-    iso = IsolationForest(n_estimators=300, contamination=0.1,
-                          random_state=42+fold_i, n_jobs=-1)
-    iso.fit(X_tr_ad)
-    oof_if[va_idx] = -iso.decision_function(X_va_ad)
-    t_if = time.time() - t0
-
-    # LOF
-    t0 = time.time()
-    lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1,
-                              novelty=True, n_jobs=-1)
-    lof.fit(X_tr_ad)
-    oof_lof[va_idx] = -lof.decision_function(X_va_ad)
-    t_lof = time.time() - t0
-
-    # # One-Class SVM — 已注释（耗时过长，AUC仅约0.51）
-    # t0 = time.time()
-    # ocsvm = OneClassSVM(kernel='rbf', gamma='scale', nu=0.1)
-    # ocsvm.fit(X_tr_pca)
-    # oof_ocsvm[va_idx] = -ocsvm.decision_function(X_va_pca)
-    # t_ocsvm = time.time() - t0
-
-    auc_if  = roc_auc_score(labels[va_idx], oof_if[va_idx])
-    auc_lof = roc_auc_score(labels[va_idx], oof_lof[va_idx])
-    # auc_ocsvm = roc_auc_score(labels[va_idx], oof_ocsvm[va_idx])
-    print(f"  Fold {fold_i+1}: IF={auc_if:.4f}({t_if:.0f}s) LOF={auc_lof:.4f}({t_lof:.0f}s)")
-
-auc_if_oof    = roc_auc_score(labels, oof_if)
-auc_lof_oof   = roc_auc_score(labels, oof_lof)
-# auc_ocsvm_oof = roc_auc_score(labels, oof_ocsvm)
-
-# 修正方向
-if auc_if_oof < 0.5:
-    oof_if = -oof_if; auc_if_oof = 1 - auc_if_oof
-if auc_lof_oof < 0.5:
-    oof_lof = -oof_lof; auc_lof_oof = 1 - auc_lof_oof
-# if auc_ocsvm_oof < 0.5:
-#     oof_ocsvm = -oof_ocsvm; auc_ocsvm_oof = 1 - auc_ocsvm_oof
-
-f1_if    = _best_f1(labels, oof_if)
-f1_lof   = _best_f1(labels, oof_lof)
-# f1_ocsvm = _best_f1(labels, oof_ocsvm)
-
-print(f"\n  无监督基线 OOF 汇总:")
-print(f"    Isolation Forest:  AUC={auc_if_oof:.4f}  F1={f1_if:.4f}")
-print(f"    LOF:               AUC={auc_lof_oof:.4f}  F1={f1_lof:.4f}")
-# print(f"    One-Class SVM:     AUC={auc_ocsvm_oof:.4f}  F1={f1_ocsvm:.4f}")  # 已注释
+if SKIP_EXTRA_COMPARISON:
+    print("\n--- 15a/15b: 跳过耗时对比实验，仅保留G1/G2/G3消融和G3 artifact导出 ---")
+else:
+    print("\n--- 15a/15b: 对比实验已临时关闭；如需恢复，请从历史版本恢复该代码块 ---")
 
 # =============================================================================
 # Step 16: 完整对比实验表
@@ -987,6 +860,29 @@ print("=" * 78)
 total_elapsed = time.time() - t_total
 print(f"\nTotal time: {total_elapsed/60:.1f} min")
 print("Phase 3 Done!")
+
+RESULT_DIR = r'C:\Users\wb.zhoushujie\PyCharmMiscProject\results'
+os.makedirs(RESULT_DIR, exist_ok=True)
+phase3_artifact_path = os.path.join(RESULT_DIR, 'sgcc_phase3_g3_artifacts.npz')
+np.savez_compressed(
+    phase3_artifact_path,
+    labels=labels,
+    X_g3=X_g3.astype(np.float32),
+    trans_pca16=trans_pca16.astype(np.float32),
+    oof_cat=res_g3['oof_cat'].astype(np.float32),
+    oof_xgb=res_g3['oof_xgb'].astype(np.float32),
+    oof_lgb=res_g3['oof_lgb'].astype(np.float32),
+    oof_ensemble=res_g3['oof_rank'].astype(np.float32),
+    metrics=np.array([
+        res_g3['ens_auc'],
+        res_g3['best_f1'],
+        res_g3['cat_oof_auc'],
+        res_g3['xgb_oof_auc'],
+        res_g3['lgb_oof_auc'],
+    ], dtype=np.float32),
+    metric_names=np.array(['g3_auc', 'g3_best_f1', 'cat_oof_auc', 'xgb_oof_auc', 'lgb_oof_auc']),
+)
+print(f"[OK] G3融合基线artifact已保存: {phase3_artifact_path}")
 
 # =============================================================================
 # Step 17: 可视化图表（论文级，参考 london_difficulty_visualize.py 风格）

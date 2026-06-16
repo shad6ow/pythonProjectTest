@@ -1,6 +1,6 @@
 
 # =============================================================================
-# London 分难度攻击实验 — 可视化分析
+# London 分难度异常用电场景实验 — 可视化分析
 # 读取 london_difficulty_results.json，生成论文级别图表
 # =============================================================================
 
@@ -57,7 +57,7 @@ plt.rcParams.update({
 })
 
 # =============================================================================
-# 图1: AUC vs 攻击难度 (所有模型)
+# 图1: AUC vs 异常用电场景难度 (所有模型)
 # =============================================================================
 fig1, ax1 = plt.subplots(figsize=(10, 6.5))
 
@@ -69,9 +69,9 @@ for mname, style in model_groups.items():
 
 ax1.set_xticks(x_pos)
 ax1.set_xticklabels(diff_cn)
-ax1.set_xlabel('攻击难度级别')
+ax1.set_xlabel('异常用电场景难度级别')
 ax1.set_ylabel('OOF AUC')
-ax1.set_title('检测性能随攻击难度变化曲线（London Smart Meters 数据集）')
+ax1.set_title('检测性能随异常用电场景难度变化曲线（London Smart Meters 数据集）')
 ax1.legend(loc='lower left', framealpha=0.9, ncol=2)
 ax1.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
 ax1.set_ylim(bottom=max(0.45, min(all_results['Hard'][m]['auc'] for m in model_groups) - 0.05))
@@ -83,7 +83,7 @@ print(f"[OK] 图1 已保存: {fig1_path}")
 plt.close(fig1)
 
 # =============================================================================
-# 图2: F1 vs 攻击难度 (有 F1 的模型)
+# 图2: F1 vs 异常用电场景难度 (有 F1 的模型)
 # =============================================================================
 fig2, ax2 = plt.subplots(figsize=(10, 6.5))
 
@@ -97,9 +97,9 @@ for mname, style in model_groups.items():
 
 ax2.set_xticks(x_pos)
 ax2.set_xticklabels(diff_cn)
-ax2.set_xlabel('攻击难度级别')
+ax2.set_xlabel('异常用电场景难度级别')
 ax2.set_ylabel('OOF F1 分数')
-ax2.set_title('F1分数随攻击难度变化曲线（London Smart Meters 数据集）')
+ax2.set_title('F1分数随异常用电场景难度变化曲线（London Smart Meters 数据集）')
 ax2.legend(loc='lower left', framealpha=0.9, ncol=2)
 ax2.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
 
@@ -110,36 +110,54 @@ print(f"[OK] 图2 已保存: {fig2_path}")
 plt.close(fig2)
 
 # =============================================================================
-# 图3: 性能退化率柱状图 (简单 → 困难 的 AUC 下降幅度)
+# 图3: 三档难度下的性能退化幅度与退化率
 # =============================================================================
-fig3, ax3 = plt.subplots(figsize=(11, 6))
+fig3, (ax3a, ax3b) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
 
 model_names_sorted = sorted(
     model_groups.keys(),
     key=lambda m: all_results['Easy'][m]['auc'] - all_results['Hard'][m]['auc'],
-    reverse=True  # 退化最大的排前面
+    reverse=True
 )
-
-bars_x = np.arange(len(model_names_sorted))
-bar_colors = [model_groups[m]['color'] for m in model_names_sorted]
 bar_labels_cn = [model_groups[m]['cn'] for m in model_names_sorted]
-degradations = [all_results['Easy'][m]['auc'] - all_results['Hard'][m]['auc']
-                for m in model_names_sorted]
+x = np.arange(len(model_names_sorted))
+width = 0.24
 
-bars = ax3.bar(bars_x, degradations, color=bar_colors, width=0.6, edgecolor='white', linewidth=0.5)
+intervals = [
+    ('简单→中等', 'Easy', 'Medium', '#3498DB'),
+    ('中等→困难', 'Medium', 'Hard', '#E67E22'),
+    ('简单→困难', 'Easy', 'Hard', '#E74C3C'),
+]
 
-# 在柱子上标注数值
-for bar, deg in zip(bars, degradations):
-    ax3.text(bar.get_x() + bar.get_width()/2., bar.get_height() + 0.002,
-             f'{deg:.4f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+def _plot_degradation(ax, metric_key, metric_label):
+    max_height = 0.0
+    for offset, (label, start, end, color) in zip([-width, 0, width], intervals):
+        start_vals = np.array([all_results[start][m][metric_key] for m in model_names_sorted], dtype=float)
+        end_vals = np.array([all_results[end][m][metric_key] for m in model_names_sorted], dtype=float)
+        deg = start_vals - end_vals
+        rate = deg / np.clip(start_vals, 1e-8, None) * 100
+        max_height = max(max_height, float(np.nanmax(deg)))
+        bars = ax.bar(x + offset, deg, width=width, color=color, label=label,
+                      edgecolor='white', linewidth=0.6, alpha=0.92)
+        for bar, d, r in zip(bars, deg, rate):
+            if np.isnan(d):
+                continue
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.006,
+                    f'{d:.3f}\n{r:.1f}%', ha='center', va='bottom', fontsize=8)
+    ax.set_ylabel(f'{metric_label} 退化幅度')
+    ax.set_title(f'{metric_label} 在三档异常用电场景难度下的退化幅度与退化率')
+    ax.grid(axis='y', linestyle='--', alpha=0.35)
+    ax.axhline(y=0, color='black', linewidth=0.6)
+    ax.set_ylim(0, max_height * 1.35 if max_height > 0 else 0.1)
 
-ax3.set_xticks(bars_x)
-ax3.set_xticklabels(bar_labels_cn, rotation=30, ha='right', fontsize=11)
-ax3.set_ylabel('AUC 退化幅度（简单 → 困难）')
-ax3.set_title('各模型在攻击难度提升下的性能退化对比')
-ax3.axhline(y=0, color='black', linewidth=0.5)
+_plot_degradation(ax3a, 'auc', 'AUC')
+_plot_degradation(ax3b, 'f1', 'F1')
 
-fig3.tight_layout()
+ax3a.legend(loc='upper left', ncol=3, framealpha=0.9)
+ax3b.set_xticks(x)
+ax3b.set_xticklabels(bar_labels_cn, rotation=30, ha='right', fontsize=10)
+fig3.suptitle('各模型随异常用电场景难度提升的性能退化对比（数值=退化幅度/退化率）', fontsize=16, fontweight='bold')
+fig3.tight_layout(rect=[0, 0, 1, 0.96])
 fig3_path = os.path.join(RESULT_DIR, 'fig3_degradation_bar.png')
 fig3.savefig(fig3_path)
 print(f"[OK] 图3 已保存: {fig3_path}")
@@ -173,7 +191,7 @@ for i in range(len(model_order)):
         ax4.text(j, i, f'{val:.4f}', ha='center', va='center',
                  fontsize=11, fontweight='bold', color=color)
 
-ax4.set_title('AUC 热力图：模型 × 攻击难度')
+ax4.set_title('AUC 热力图：模型 × 异常用电场景难度')
 fig4.colorbar(im, ax=ax4, label='AUC', shrink=0.8)
 
 fig4.tight_layout()

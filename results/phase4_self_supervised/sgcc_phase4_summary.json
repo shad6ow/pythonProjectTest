@@ -1,0 +1,161 @@
+{
+  "n_users": 42372,
+  "n_months": 34,
+  "feat_dim": 34,
+  "positive_count": 3615,
+  "negative_count": 38757,
+  "best_val_loss": 154027.05089,
+  "normal_train_users": 38757,
+  "feature_file": "C:\\Users\\wb.zhoushujie\\PyCharmMiscProject\\results\\phase4_self_supervised\\sgcc_phase4_self_supervised_features.csv",
+  "checkpoint": "C:\\Users\\wb.zhoushujie\\PyCharmMiscProject\\results\\phase4_self_supervised\\sgcc_phase4_self_supervised_model.pth",
+  "metrics": {
+    "ss_rec_mean": {
+      "auc": 0.63465,
+      "pr_auc": 0.11381,
+      "best_f1": 0.20909,
+      "best_threshold": 0.73293,
+      "positive_rate_at_threshold": 0.50545
+    },
+    "ss_rec_max": {
+      "auc": 0.57461,
+      "pr_auc": 0.09831,
+      "best_f1": 0.1852,
+      "best_threshold": 1.83408,
+      "positive_rate_at_threshold": 0.69355
+    },
+    "ss_pred_mean": {
+      "auc": 0.62686,
+      "pr_auc": 0.11094,
+      "best_f1": 0.20579,
+      "best_threshold": 0.52206,
+      "positive_rate_at_threshold": 0.51539
+    },
+    "ss_pred_max": {
+      "auc": 0.58297,
+      "pr_auc": 0.09964,
+      "best_f1": 0.18786,
+      "best_threshold": 2.05015,
+      "positive_rate_at_threshold": 0.61267
+    },
+    "ss_rec_scale_mean": {
+      "auc": 0.52414,
+      "pr_auc": 0.09262,
+      "best_f1": 0.15962,
+      "best_threshold": -1.38677,
+      "positive_rate_at_threshold": 0.39875
+    },
+    "ss_rec_scale_max": {
+      "auc": 0.5296,
+      "pr_auc": 0.09166,
+      "best_f1": 0.16139,
+      "best_threshold": -6.6639,
+      "positive_rate_at_threshold": 0.50106
+    },
+    "ss_pred_scale_mean": {
+      "auc": 0.507,
+      "pr_auc": 0.08734,
+      "best_f1": 0.15787,
+      "best_threshold": -13.68529,
+      "positive_rate_at_threshold": 0.9659
+    },
+    "ss_pred_scale_max": {
+      "auc": 0.5079,
+      "pr_auc": 0.08396,
+      "best_f1": 0.15928,
+      "best_threshold": -136.33031,
+      "positive_rate_at_threshold": 0.96078
+    },
+    "ss_rec_ref_pct": {
+      "auc": 0.63464,
+      "pr_auc": 0.11378,
+      "best_f1": 0.20908,
+      "best_threshold": 0.51493,
+      "positive_rate_at_threshold": 0.50548
+    },
+    "ss_pred_ref_pct": {
+      "auc": 0.62685,
+      "pr_auc": 0.11091,
+      "best_f1": 0.20578,
+      "best_threshold": 0.50412,
+      "positive_rate_at_threshold": 0.51541
+    },
+    "ss_rec_ref_z": {
+      "auc": 0.63465,
+      "pr_auc": 0.11381,
+      "best_f1": 0.20909,
+      "best_threshold": 0.03685,
+      "positive_rate_at_threshold": 0.50545
+    },
+    "ss_pred_ref_z": {
+      "auc": 0.62686,
+      "pr_auc": 0.11094,
+      "best_f1": 0.20579,
+      "best_threshold": 0.01043,
+      "positive_rate_at_threshold": 0.51539
+    },
+    "ss_rec_late_mean": {
+      "auc": 0.61433,
+      "pr_auc": 0.10834,
+      "best_f1": 0.20392,
+      "best_threshold": 0.74536,
+      "positive_rate_at_threshold": 0.54033
+    },
+    "ss_pred_late_mean": {
+      "auc": 0.61239,
+      "pr_auc": 0.10752,
+      "best_f1": 0.20517,
+      "best_threshold": 0.57975,
+      "positive_rate_at_threshold": 0.51676
+    },
+    "ss_latent_dist": {
+      "auc": 0.60726,
+      "pr_auc": 0.11347,
+      "best_f1": 0.20505,
+      "best_threshold": 2.88558,
+      "positive_rate_at_threshold": 0.32765
+    },
+    "ss_cluster_latent_dist": {
+      "auc": 0.61053,
+      "pr_auc": 0.1249,
+      "best_f1": 0.20246,
+      "best_threshold": 1.39015,
+      "positive_rate_at_threshold": 0.28514
+    },
+    "ss_cluster_latent_ref_pct": {
+      "auc": 0.61051,
+      "pr_auc": 0.12461,
+      "best_f1": 0.20245,
+      "best_threshold": 0.72926,
+      "positive_rate_at_threshold": 0.28516
+    },
+    "ss_top_month_score": {
+      "auc": 0.57807,
+      "pr_auc": 0.09879,
+      "best_f1": 0.18631,
+      "best_threshold": 3.9049,
+      "positive_rate_at_threshold": 0.64104
+    },
+    "ss_abnormal_month_count": {
+      "auc": 0.52366,
+      "pr_auc": 0.08908,
+      "best_f1": 0.15722,
+      "best_threshold": 0.0,
+      "positive_rate_at_threshold": 1.0
+    },
+    "ss_max_consec_abnormal_months": {
+      "auc": 0.51197,
+      "pr_auc": 0.08743,
+      "best_f1": 0.15722,
+      "best_threshold": 0.0,
+      "positive_rate_at_threshold": 1.0
+    },
+    "ss_combined_score": {
+      "auc": 0.6455,
+      "pr_auc": 0.12145,
+      "best_f1": 0.20743,
+      "best_threshold": 0.22285,
+      "positive_rate_at_threshold": 0.48766
+    }
+  },
+  "elapsed_sec": 592.76754
+}

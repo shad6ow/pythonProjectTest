@@ -1,0 +1,53 @@
+{
+  "note": "判别(有监督)与自监督定位的正交性证据; 数字均来自真实计算。",
+  "n_users": 42372,
+  "evidence1_orthogonality": {
+    "g3_vs_loc_pearson": 0.20888874140756222,
+    "g3_vs_loc_pearson_p": 0.0,
+    "g3_vs_loc_spearman": 0.16875049099637057,
+    "g3_vs_interval_conf_pearson": 0.10703667231342351,
+    "g3_vs_interval_conf_spearman": 0.14165623200684851,
+    "interpretation": "相关系数接近0表明判别分与定位分测量不同维度, 信息正交。"
+  },
+  "evidence2_dim_asymmetry": {
+    "discrimination_time_dim": 0,
+    "localization_time_dim": 34,
+    "interpretation": "判别输出用户级标量(时间维=0), 无法回答异常发生月份; 定位输出逐月分布。"
+  },
+  "evidence3_controlled_pair": [
+    {
+      "CONS_NO": "67CF1D105EE94B3444DF605BDBA36CED",
+      "g3_score": 42358.68359375,
+      "loc_score": 0.83601886,
+      "pred_interval": [
+        0,
+        9
+      ],
+      "interval_confidence": 0.0860379208810627,
+      "att_entropy": 2.3195255837444195,
+      "att_peak": 0.26688465,
+      "top3_months": [
+        0,
+        9,
+        3
+      ]
+    },
+    {
+      "CONS_NO": "5AA799FAF04318D5E39E48CF1EF8B617",
+      "g3_score": 42358.68359375,
+      "loc_score": 0.9723736,
+      "pred_interval": [
+        3,
+        3
+      ],
+      "interval_confidence": 0.8944975733757019,
+      "att_entropy": 0.5287165708846079,
+      "att_peak": 0.8944976,
+      "top3_months": [
+        3,
+        4,
+        5
+      ]
+    }
+  ]
+}

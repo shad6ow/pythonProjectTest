@@ -1,0 +1,141 @@
+{
+  "note": "success = localization quality vs baselines, NOT global AUC/F1; G3 comparison not claimed.",
+  "synthetic_injection_localization": {
+    "overall": {
+      "mil_attention": {
+        "mean_iou": 0.14601,
+        "pa_precision": 0.27372,
+        "pa_recall": 0.40882,
+        "pa_f1": 0.3279,
+        "n_users": 500
+      },
+      "deviation_baseline": {
+        "mean_iou": 0.09724,
+        "pa_precision": 0.28612,
+        "pa_recall": 0.40238,
+        "pa_f1": 0.33443,
+        "n_users": 500
+      },
+      "uniform_baseline": {
+        "mean_iou": 0.11871,
+        "pa_precision": 0.11871,
+        "pa_recall": 1.0,
+        "pa_f1": 0.21222,
+        "n_users": 500
+      }
+    },
+    "by_shape": {
+      "sudden_drop": {
+        "mil_attention": {
+          "mean_iou": 0.10984,
+          "pa_precision": 0.27497,
+          "pa_recall": 0.40613,
+          "pa_f1": 0.32792,
+          "n_users": 129
+        },
+        "deviation_baseline": {
+          "mean_iou": 0.12135,
+          "pa_precision": 0.31025,
+          "pa_recall": 0.44636,
+          "pa_f1": 0.36606,
+          "n_users": 129
+        },
+        "uniform_baseline": {
+          "mean_iou": 0.11902,
+          "pa_precision": 0.11902,
+          "pa_recall": 1.0,
+          "pa_f1": 0.21271,
+          "n_users": 129
+        }
+      },
+      "sustained_low": {
+        "mil_attention": {
+          "mean_iou": 0.1306,
+          "pa_precision": 0.23495,
+          "pa_recall": 0.34429,
+          "pa_f1": 0.2793,
+          "n_users": 141
+        },
+        "deviation_baseline": {
+          "mean_iou": 0.11314,
+          "pa_precision": 0.30502,
+          "pa_recall": 0.44118,
+          "pa_f1": 0.36068,
+          "n_users": 141
+        },
+        "uniform_baseline": {
+          "mean_iou": 0.12057,
+          "pa_precision": 0.12057,
+          "pa_recall": 1.0,
+          "pa_f1": 0.21519,
+          "n_users": 141
+        }
+      },
+      "zero": {
+        "mil_attention": {
+          "mean_iou": 0.27658,
+          "pa_precision": 0.38585,
+          "pa_recall": 0.57279,
+          "pa_f1": 0.4611,
+          "n_users": 105
+        },
+        "deviation_baseline": {
+          "mean_iou": 0.05626,
+          "pa_precision": 0.23041,
+          "pa_recall": 0.358,
+          "pa_f1": 0.28037,
+          "n_users": 105
+        },
+        "uniform_baseline": {
+          "mean_iou": 0.11737,
+          "pa_precision": 0.11737,
+          "pa_recall": 1.0,
+          "pa_f1": 0.21008,
+          "n_users": 105
+        }
+      },
+      "slow_drift": {
+        "mil_attention": {
+          "mean_iou": 0.09104,
+          "pa_precision": 0.22481,
+          "pa_recall": 0.3487,
+          "pa_f1": 0.27337,
+          "n_users": 125
+        },
+        "deviation_baseline": {
+          "mean_iou": 0.08887,
+          "pa_precision": 0.29,
+          "pa_recall": 0.3487,
+          "pa_f1": 0.31665,
+          "n_users": 125
+        },
+        "uniform_baseline": {
+          "mean_iou": 0.11741,
+          "pa_precision": 0.11741,
+          "pa_recall": 1.0,
+          "pa_f1": 0.21015,
+          "n_users": 125
+        }
+      }
+    }
+  },
+  "sanity_user_auc": {
+    "auc": 0.87919,
+    "pr_auc": 0.51058,
+    "best_f1": 0.5255,
+    "best_threshold": 0.78955,
+    "positive_rate_at_threshold": 0.09424
+  },
+  "attention_separation": {
+    "max_attn_mean_abnormal": 0.33865,
+    "max_attn_mean_normal": 0.14008,
+    "max_attn_separation": 0.19857
+  },
+  "n_injected": 500,
+  "injection_shape_counts": {
+    "sudden_drop": 129,
+    "sustained_low": 141,
+    "zero": 105,
+    "slow_drift": 125
+  }
+}
